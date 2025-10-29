@@ -11,6 +11,13 @@ import {
 	ackAllChecksBodyValidation,
 } from "../../validation/joi.js";
 
+function parsePositiveInt(value, defaultVal) {
+	const n = Number(value);
+	if (!Number.isFinite(n)) return defaultVal;
+	const i = Math.floor(n);
+	return i >= 0 ? i : defaultVal; // allow 0 (page 0)
+}
+
 const SERVICE_NAME = "checkController";
 
 /**
@@ -43,31 +50,25 @@ class CheckController extends BaseController {
 	}
 
 	/**
-	 * Retrieves checks for a specific monitor with filtering and pagination.
+	 * Retrieves all checks for the current user's team with filtering and pagination.
 	 *
 	 * @async
-	 * @function getChecksByMonitor
+	 * @function getChecksByTeam
 	 * @param {Object} req - Express request object
-	 * @param {Object} req.params - URL parameters
-	 * @param {string} req.params.monitorId - ID of the monitor to get checks for
 	 * @param {Object} req.query - Query parameters for filtering and pagination
-	 * @param {string} [req.query.type] - Type of checks to filter by
 	 * @param {string} [req.query.sortOrder] - Sort order (asc/desc)
 	 * @param {string} [req.query.dateRange] - Date range filter
 	 * @param {string} [req.query.filter] - General filter string
 	 * @param {boolean} [req.query.ack] - Filter by acknowledgment status
 	 * @param {number} [req.query.page] - Page number for pagination
 	 * @param {number} [req.query.rowsPerPage] - Number of rows per page
-	 * @param {string} [req.query.status] - Filter by check status
 	 * @param {Object} req.user - Current authenticated user (from JWT)
 	 * @param {string} req.user.teamId - User's team ID
 	 * @param {Object} res - Express response object
 	 * @returns {Promise<Object>} Success response with checks data
-	 * @throws {Error} 422 - Validation error if parameters are invalid
-	 * @throws {Error} 404 - Not found if monitor doesn't exist
-	 * @throws {Error} 403 - Forbidden if user doesn't have access to monitor
+	 * @throws {Error} 422 - Validation error if query parameters are invalid
 	 * @example
-	 * GET /checks/monitor/507f1f77bcf86cd799439011?page=1&rowsPerPage=10&status=down
+	 * GET /checks/team?page=1&rowsPerPage=20&status=down&ack=false
 	 * // Requires JWT authentication
 	 */
 	getChecksByMonitor = this.asyncHandler(
@@ -75,9 +76,20 @@ class CheckController extends BaseController {
 			await getChecksParamValidation.validateAsync(req.params);
 			await getChecksQueryValidation.validateAsync(req.query);
 
+			// safe pagination parsing
+			const page = parsePositiveInt(req.query?.page, 0); // 0-based page default
+			const rowsPerPage = parsePositiveInt(req.query?.rowsPerPage, 20); // default 20
+
+			// build sanitized query object (preserve other filters)
+			const sanitizedQuery = {
+				...req.query,
+				page,
+				rowsPerPage,
+			};
+
 			const result = await this.checkService.getChecksByMonitor({
 				monitorId: req?.params?.monitorId,
-				query: req?.query,
+				query: sanitizedQuery,
 				teamId: req?.user?.teamId,
 			});
 
@@ -91,7 +103,7 @@ class CheckController extends BaseController {
 	);
 
 	/**
-	 * Retrieves all checks for the current user's team with filtering and pagination.
+	 * Retrieves checks for the current user's team with filtering and pagination.
 	 *
 	 * @async
 	 * @function getChecksByTeam
@@ -115,13 +127,26 @@ class CheckController extends BaseController {
 	getChecksByTeam = this.asyncHandler(
 		async (req, res) => {
 			await getTeamChecksQueryValidation.validateAsync(req.query);
-			const checkData = await this.checkService.getChecksByTeam({
+
+			// safe pagination parsing
+			const page = parsePositiveInt(req.query?.page, 0); // 0-based page default
+			const rowsPerPage = parsePositiveInt(req.query?.rowsPerPage, 20); // default 20
+
+			// build sanitized query object (preserve other filters)
+			const sanitizedQuery = {
+				...req.query,
+				page,
+				rowsPerPage,
+			};
+
+			const result = await this.checkService.getChecksByTeam({
+				query: sanitizedQuery,
 				teamId: req?.user?.teamId,
-				query: req?.query,
 			});
+
 			return res.success({
 				msg: this.stringService.checkGet,
-				data: checkData,
+				data: result,
 			});
 		},
 		SERVICE_NAME,
@@ -236,7 +261,7 @@ class CheckController extends BaseController {
 			const updatedChecks = await this.checkService.ackAllChecks({
 				monitorId: req?.params?.monitorId,
 				path: req?.params?.path,
-				teamId: req?.user?.teamId,
+				teamId,
 				ack: req?.body?.ack,
 			});
 
@@ -353,7 +378,7 @@ class CheckController extends BaseController {
 			});
 		},
 		SERVICE_NAME,
-		"updateChecksTtl"
+		"updateChecksTTL"
 	);
 }
 

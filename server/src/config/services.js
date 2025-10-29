@@ -169,7 +169,7 @@ export const initializeServices = async ({ logger, envSettings, settingsService 
 		notificationUtils,
 	});
 
-	const errorService = new ErrorService();
+	const errorService = ErrorService; // default export is already an instance
 
 	const superSimpleQueueHelper = new SuperSimpleQueueHelper({
 		db,

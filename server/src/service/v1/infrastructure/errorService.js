@@ -65,8 +65,28 @@ class ErrorService {
 		return new AppError(message, status, service, method, details);
 	};
 
-	createValidationError = (message, details = null, service = null, method = null) => {
-		return new ValidationError(message, details, service, method);
+	// Unified createValidationError:
+	// - if first arg is a Mongoose ValidationError object, return structured details
+	// - otherwise create a ValidationError AppError
+	createValidationError = (errOrMessage, details = null, service = null, method = null) => {
+		// handle Mongoose ValidationError object
+		if (errOrMessage && errOrMessage.name === "ValidationError" && errOrMessage.errors) {
+			const extracted = Object.keys(errOrMessage.errors).map((key) => {
+				const e = errOrMessage.errors[key];
+				return { field: e.path || key, message: e.message };
+			});
+			console.error("Mongoose validation details:", JSON.stringify(extracted, null, 2));
+			return {
+				status: 400,
+				message: "Database validation failed",
+				data: extracted,
+				original: errOrMessage,
+			};
+		}
+
+		// handle string/message case (create ValidationError AppError)
+		const msg = typeof errOrMessage === "string" ? errOrMessage : "Validation error";
+		return new ValidationError(msg, details, service, method);
 	};
 
 	createAuthenticationError = (message = "Unauthorized", details = null, service = null, method = null) => {
@@ -98,4 +118,5 @@ class ErrorService {
 	};
 }
 
-export default ErrorService;
+export { ErrorService }; // add this so other modules can do: import { ErrorService } from '...'
+export default new ErrorService();

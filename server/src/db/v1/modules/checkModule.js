@@ -10,6 +10,12 @@ const dateRangeLookup = {
 	month: new Date(new Date().setMonth(new Date().getMonth() - 1)),
 	all: undefined,
 };
+const toInt = (v, def) => {
+  const n = Number(v);
+  if (!Number.isFinite(n)) return def;
+  const i = Math.floor(n);
+  return i >= 0 ? i : def;
+};
 
 class CheckModule {
 	constructor({ logger, Check, HardwareCheck, PageSpeedCheck, Monitor, User }) {
@@ -31,11 +37,19 @@ class CheckModule {
 		}
 	};
 
+	// ...existing code...
 	getChecksByMonitor = async ({ monitorId, sortOrder, dateRange, filter, ack, page, rowsPerPage, status }) => {
 		try {
+			// normalize status
 			status = status === "true" ? true : status === "false" ? false : undefined;
-			page = parseInt(page);
-			rowsPerPage = parseInt(rowsPerPage);
+
+			// safe parsing with sensible defaults and bounds
+			page = toInt(page, 0); // default page = 0 (0-based)
+			rowsPerPage = toInt(rowsPerPage, 20); // default 20 rows per page
+			if (page < 0) page = 0;
+			if (rowsPerPage < 1) rowsPerPage = 20;
+			const MAX_ROWS = 1000;
+			if (rowsPerPage > MAX_ROWS) rowsPerPage = MAX_ROWS;
 
 			const ackStage = ack === "true" ? { ack: true } : { $or: [{ ack: false }, { ack: { $exists: false } }] };
 
@@ -70,14 +84,11 @@ class CheckModule {
 				}
 			}
 
-			//Sort
+			// Sort
 			sortOrder = sortOrder === "asc" ? 1 : -1;
 
 			// Pagination
-			let skip = 0;
-			if (page && rowsPerPage) {
-				skip = page * rowsPerPage;
-			}
+			const skip = page * rowsPerPage;
 
 			const checks = await this.Check.aggregate([
 				{ $match: matchStage },
@@ -99,13 +110,16 @@ class CheckModule {
 					},
 				},
 			]);
-			return checks[0];
+
+			// ensure a consistent return value
+			return checks && checks[0] ? checks[0] : { checksCount: 0, checks: [] };
 		} catch (error) {
 			error.service = SERVICE_NAME;
 			error.method = "getChecks";
 			throw error;
 		}
 	};
+	// ...existing code...
 
 	getChecksByTeam = async ({ sortOrder, dateRange, filter, ack, page, rowsPerPage, teamId }) => {
 		try {

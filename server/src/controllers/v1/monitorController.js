@@ -15,6 +15,8 @@ import {
 import sslChecker from "ssl-checker";
 import { fetchMonitorCertificate } from "./controllerUtils.js";
 import BaseController from "./baseController.js";
+import fs from "fs/promises";
+import path from "path";
 
 const SERVICE_NAME = "monitorController";
 class MonitorController extends BaseController {
@@ -205,28 +207,56 @@ class MonitorController extends BaseController {
 
 	createBulkMonitors = this.asyncHandler(
 		async (req, res) => {
-			if (!req.file) {
-				throw this.errorService.createBadRequestError("No file uploaded");
+			// support req.file, req.files.csvFile, or multer fields
+			const file = req.file || (req.files && (req.files.csvFile ? req.files.csvFile[0] : Object.values(req.files)[0]));
+
+			if (!file) {
+				console.warn(
+					"createBulkMonitors: no file found on req - req.file:",
+					!!req.file,
+					"req.files keys:",
+					req.files ? Object.keys(req.files) : null
+				);
+				throw this.errorService.createBadRequestError("No file uploaded. Ensure form field name is 'csvFile' and enctype='multipart/form-data'.");
 			}
 
-			if (!req.file.mimetype.includes("csv")) {
-				throw this.errorService.createBadRequestError("File is not a CSV");
+			const originalName = (file.originalname || file.name || "").toString();
+			const ext = (path.extname(originalName) || "").toLowerCase();
+
+			const allowedMimes = ["text/csv", "application/csv", "application/vnd.ms-excel", "text/plain", "application/octet-stream"];
+
+			const mimetypeOk = typeof file.mimetype === "string" && (allowedMimes.includes(file.mimetype) || file.mimetype.includes("csv"));
+			if (!mimetypeOk && ext !== ".csv") {
+				console.warn("createBulkMonitors: rejected file mime/extension", { mimetype: file.mimetype, ext, originalName });
+				throw this.errorService.createBadRequestError(
+					"File is not a CSV. Accepted extensions: .csv (mimetypes: text/csv, text/plain, application/vnd.ms-excel)."
+				);
 			}
 
-			if (req.file.size === 0) {
+			const size = file.size ?? (file.buffer ? file.buffer.length : 0);
+			if (!size) {
 				throw this.errorService.createBadRequestError("File is empty");
 			}
 
 			const userId = req?.user?._id;
 			const teamId = req?.user?.teamId;
-
 			if (!userId || !teamId) {
 				throw this.errorService.createBadRequestError("Missing userId or teamId");
 			}
 
-			const fileData = req?.file?.buffer?.toString("utf-8");
-			if (!fileData) {
-				throw this.errorService.createBadRequestError("Cannot get file from buffer");
+			// read file content from buffer (preferred) or from disk path
+			let fileData;
+			if (file.buffer) {
+				fileData = file.buffer.toString("utf-8");
+			} else if (file.path) {
+				try {
+					fileData = await fs.readFile(file.path, "utf-8");
+				} catch (err) {
+					console.error("createBulkMonitors: failed reading file.path", file.path, err);
+					throw this.errorService.createBadRequestError("Cannot read uploaded file");
+				}
+			} else {
+				throw this.errorService.createBadRequestError("Cannot get file from upload (no buffer or path)");
 			}
 
 			const monitors = await this.monitorService.createBulkMonitors({ fileData, userId, teamId });

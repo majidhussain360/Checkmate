@@ -132,6 +132,7 @@ const getMonitorsByTeamIdQueryValidation = joi.object({
 	filter: joi.string(),
 	field: joi.string(),
 	order: joi.string().valid("asc", "desc"),
+	status: joi.string().valid("true", "false").optional(),
 });
 
 const getMonitorStatsByIdParamValidation = joi.object({
@@ -175,6 +176,27 @@ const createMonitorBodyValidation = joi.object({
 	matchMethod: joi.string(),
 	gameId: joi.string().allow(""),
 	group: joi.string().max(50).trim().allow(null, "").optional(),
+
+	// Added to allow HTTP options and assertions in request body
+	httpOptions: joi
+		.object({
+			method: joi.string().valid("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS").default("GET"),
+			headers: joi.object().pattern(joi.string(), joi.string()).default({}),
+			body: joi.string().allow(""),
+			timeout: joi.number().default(5000),
+		})
+		.optional(),
+
+	assertions: joi
+		.array()
+		.items(
+			joi.object({
+				type: joi.string().valid("status-code", "body", "header", "json-path").required(),
+				comparison: joi.string().valid("equals", "contains", "matches", "gt", "gte", "lt", "lte").required(),
+				value: joi.alternatives().try(joi.string(), joi.number(), joi.boolean()).required(),
+			})
+		)
+		.optional(),
 });
 
 const createMonitorsBodyValidation = joi.array().items(
@@ -186,6 +208,7 @@ const createMonitorsBodyValidation = joi.array().items(
 
 const editMonitorBodyValidation = joi.object({
 	name: joi.string(),
+	isActive: joi.boolean(),
 	statusWindowSize: joi.number().min(1).max(20).default(5),
 	statusWindowThreshold: joi.number().min(1).max(100).default(60),
 	description: joi.string(),
@@ -205,6 +228,25 @@ const editMonitorBodyValidation = joi.object({
 	}),
 	gameId: joi.string(),
 	group: joi.string().max(50).trim().allow(null, "").optional(),
+	httpOptions: joi
+        .object({
+            method: joi.string().valid("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS").default("GET"),
+            headers: joi.object().pattern(joi.string(), joi.string()).default({}),
+            body: joi.string().allow(""),
+            timeout: joi.number().default(5000),
+        })
+        .optional(),
+
+    assertions: joi
+        .array()
+        .items(
+            joi.object({
+                type: joi.string().valid("status-code", "body", "header", "json-path").required(),
+                comparison: joi.string().valid("equals", "contains", "matches", "gt", "gte", "lt", "lte").required(),
+                value: joi.alternatives().try(joi.string(), joi.number(), joi.boolean()).required(),
+            })
+        )
+        .optional(),
 });
 
 const pauseMonitorParamValidation = joi.object({

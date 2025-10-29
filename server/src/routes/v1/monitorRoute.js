@@ -44,6 +44,47 @@ class MonitorRoutes {
 		this.router.post("/demo", isAllowed(["admin", "superadmin"]), this.monitorController.addDemoMonitors);
 		this.router.get("/export", isAllowed(["admin", "superadmin"]), this.monitorController.exportMonitorsToCSV);
 		this.router.post("/bulk", isAllowed(["admin", "superadmin"]), upload.single("csvFile"), this.monitorController.createBulkMonitors);
+
+/**
+ * @openapi
+ * /api/v1/monitors/test-email:
+ *   post:
+ *     tags:
+ *       - Monitor
+ *     summary: Send a test email using provided or configured SMTP settings
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - to
+ *             properties:
+ *               to:
+ *                 type: string
+ *                 example: "you@example.com"
+ *               subject:
+ *                 type: string
+ *                 example: "Test email from Checkmate"
+ *               text:
+ *                 type: string
+ *               systemEmailHost:
+ *                 type: string
+ *               systemEmailPort:
+ *                 type: integer
+ *               systemEmailSecure:
+ *                 type: boolean
+ *               systemEmailUser:
+ *                 type: string
+ *               systemEmailPassword:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Test email sent successfully
+ *       400:
+ *         description: Bad request / missing SMTP configuration
+ */
 		this.router.post("/test-email", isAllowed(["admin", "superadmin"]), this.monitorController.sendTestEmail);
 		this.router.get("/games", this.monitorController.getAllGames);
 
